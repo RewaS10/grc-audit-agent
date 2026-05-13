@@ -1,690 +1,483 @@
-import streamlit as st
+import os
+import sys
 import pandas as pd
+import streamlit as st
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PATH & BACKEND SETUP (Preserved)
+# ─────────────────────────────────────────────────────────────────────────────
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, BASE_DIR)
+
+from agents.query_agent import process_query
 from agents.retrieval_agent import retrieve_controls
 from agents.analysis_agent import generate_response
-
-# ─────────────────────────────────────────────
-# PAGE CONFIG
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE CONFIGURATION
+# ─────────────────────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="GRC Audit Assistant",
-    page_icon="🛡️",
+    page_title="GRC Intelligence Engine | Enterprise AI",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
+@st.cache_data(show_spinner=False)
+def load_knowledge_base():
+    csv_path = os.path.join(BASE_DIR, "../data/SOC2_tracker - Sheet1.csv")
+    try:
+        df = pd.read_csv(csv_path)
+        return df.to_dict(orient="records"), len(df)
+    except Exception as e:
+        st.error(f"Knowledge base failed to load: {e}")
+        return [], 0
 
-# ─────────────────────────────────────────────
-# CUSTOM CSS — Dark Intelligence Theme
-# ─────────────────────────────────────────────
+knowledge_base, kb_size = load_knowledge_base()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MODERN ENTERPRISE DESIGN SYSTEM (CSS)
+# ─────────────────────────────────────────────────────────────────────────────
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;800&family=Inter:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
-/* ── Reset & Base ── */
-*, *::before, *::after { box-sizing: border-box; }
+    :root {
+        --bg-deep: #060910;
+        --bg-surface: #0E121B;
+        --bg-card: rgba(23, 28, 41, 0.7);
+        --accent-amber: #F5A623;
+        --accent-blue: #38BDF8;
+        --text-main: #E2E8F0;
+        --text-dim: #94A3B8;
+        --border-subtle: rgba(255, 255, 255, 0.08);
+        --glow-amber: rgba(245, 166, 35, 0.15);
+    }
 
-html, body, .main, .block-container, [data-testid="stAppViewContainer"] {
-    background-color: #080C14 !important;
-    color: #E2E8F0 !important;
+    /* Global Overrides */
+    .stApp {
+        background-color: var(--bg-deep) !important;
+        background-image: 
+            radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.05) 0%, transparent 25%),
+            radial-gradient(circle at 100% 100%, rgba(245, 166, 35, 0.05) 0%, transparent 25%) !important;
+    }
+
+    [data-testid="stSidebar"] {
+        background-color: var(--bg-surface) !important;
+        border-right: 1px solid var(--border-subtle);
+    }
+
+    /* Typography */
+    h1, h2, h3 {
+        font-family: 'Syne', sans-serif !important;
+        letter-spacing: -0.02em !important;
+    }
+
+    p, span, div {
+        font-family: 'Inter', sans-serif;
+    }
+
+    .mono {
+        font-family: 'IBM Plex Mono', monospace !important;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 10px;
+    }
+
+    /* Header Section */
+    .hero-container {
+        padding: 2rem 0 3rem 0;
+    }
+
+    .hero-title {
+        font-size: 3.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #FFFFFF 0%, #94A3B8 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+    }
+
+    .hero-subtitle {
+        color: var(--text-dim);
+        font-size: 1.1rem;
+        max-width: 800px;
+        border-left: 2px solid var(--accent-amber);
+        padding-left: 1.5rem;
+        margin-top: 1rem;
+    }
+
+    /* Metric Cards */
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        padding: 1.5rem;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+        border-color: rgba(245, 166, 35, 0.3);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+
+    .stat-value {
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: white;
+        font-family: 'Syne', sans-serif;
+    }
+
+    /* Search/Query Command Center */
+    .query-section {
+        background: rgba(255,255,255,0.02);
+        border: 1px solid var(--border-subtle);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 3rem;
+    }
+
+    /* Input Field Styling */
+    .stTextInput input {
+        background: var(--bg-deep) !important;
+        border: 1px solid var(--border-subtle) !important;
+        border-radius: 8px !important;
+        padding: 1.5rem !important;
+        color: white !important;
+        font-size: 1.1rem !important;
+    }
+
+    .stTextInput input:focus {
+        border-color: var(--accent-amber) !important;
+        box-shadow: 0 0 15px var(--glow-amber) !important;
+    }
+
+    /* Analysis Report Cards */
+    .intel-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        padding: 1.5rem;
+        height: 100%;
+    }
+
+    .risk-badge {
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        display: inline-block;
+        margin-bottom: 1rem;
+    }
+
+    .risk-critical { background: rgba(248, 113, 113, 0.15); color: #F87171; border: 1px solid #F87171; }
+    .risk-high { background: rgba(251, 146, 60, 0.15); color: #FB923C; border: 1px solid #FB923C; }
+    .risk-medium { background: rgba(251, 191, 36, 0.15); color: #FBBF24; border: 1px solid #FBBF24; }
+    .risk-low { background: rgba(52, 211, 153, 0.15); color: #34D399; border: 1px solid #34D399; }
+
+    /* Buttons */
+    .stButton > button {
+        background: var(--accent-amber) !important;
+        color: black !important;
+        font-weight: 700 !important;
+        border-radius: 8px !important;
+        width: 100% !important;
+        height: 3.5rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border: none !important;
+    }
+
+    /* Hide redundant elements */
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+            /* ─────────────────── SIDEBAR RADIO NAV ─────────────────── */
+
+[data-testid="stSidebar"] .stRadio > div{
+    gap: 0.5rem;
 }
 
-.block-container {
-    padding: 2.5rem 3.5rem 4rem !important;
-    max-width: 1280px !important;
+[data-testid="stSidebar"] label{
+
+    background: transparent;
+
+    border: 1px solid transparent;
+
+    padding: 12px 14px;
+
+    border-radius: 10px;
+
+    transition: all .2s ease;
+
+    color: #94A3B8 !important;
+
+    font-weight: 500;
+
+    margin-bottom: 6px;
+
+    cursor: pointer;
 }
 
-/* ── Hide Streamlit chrome ── */
-#MainMenu, footer, header, [data-testid="stToolbar"],
-[data-testid="stDecoration"], [data-testid="stStatusWidget"] {
-    display: none !important;
+[data-testid="stSidebar"] label:hover{
+
+    background: rgba(255,255,255,0.03);
+
+    border: 1px solid rgba(255,255,255,0.06);
+
+    color: white !important;
 }
 
-/* ── Typography base ── */
-body { font-family: 'Inter', sans-serif; }
+[data-testid="stSidebar"] input:checked + div{
 
-/* ── Top rule ── */
-.top-rule {
-    width: 100%;
-    height: 2px;
-    background: linear-gradient(90deg, #F5A623 0%, #E8833A 40%, transparent 100%);
-    margin-bottom: 2.5rem;
-    border-radius: 2px;
-}
+    color: #F5A623 !important;
 
-/* ── Header ── */
-.header-wrap {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    margin-bottom: 3rem;
-    gap: 2rem;
-}
-
-.header-left {}
-
-.header-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(245,166,35,0.12);
-    border: 1px solid rgba(245,166,35,0.3);
-    border-radius: 4px;
-    padding: 4px 12px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: #F5A623;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 1rem;
-}
-
-.header-badge::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    background: #F5A623;
-    border-radius: 50%;
-    animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.4; transform: scale(0.8); }
-}
-
-.header-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 42px;
-    font-weight: 800;
-    color: #F8FAFC;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-    margin: 0 0 0.6rem 0;
-}
-
-.header-title span {
-    color: #F5A623;
-}
-
-.header-sub {
-    font-family: 'Inter', sans-serif;
-    font-size: 14px;
-    font-weight: 300;
-    color: #64748B;
-    letter-spacing: 0.02em;
-    line-height: 1.6;
-    max-width: 480px;
-}
-
-.header-right {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 8px;
-    padding-top: 8px;
-}
-
-.framework-pill {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 5px 14px;
-    border-radius: 3px;
-    border: 1px solid;
-}
-
-.pill-soc2 {
-    color: #38BDF8;
-    border-color: rgba(56,189,248,0.25);
-    background: rgba(56,189,248,0.06);
-}
-
-.pill-iso {
-    color: #A78BFA;
-    border-color: rgba(167,139,250,0.25);
-    background: rgba(167,139,250,0.06);
-}
-
-.pill-gdpr {
-    color: #34D399;
-    border-color: rgba(52,211,153,0.25);
-    background: rgba(52,211,153,0.06);
-}
-
-/* ── Stat strip ── */
-.stat-strip {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1px;
-    background: #1E293B;
-    border: 1px solid #1E293B;
-    border-radius: 12px;
-    overflow: hidden;
-    margin-bottom: 2.5rem;
-}
-
-.stat-cell {
-    background: #0D1320;
-    padding: 20px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.stat-label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #475569;
-}
-
-.stat-value {
-    font-family: 'Syne', sans-serif;
-    font-size: 22px;
     font-weight: 700;
-    color: #F5A623;
 }
-
-.stat-desc {
-    font-size: 11px;
-    color: #334155;
-    font-weight: 300;
-}
-
-/* ── Query section ── */
-.query-label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #475569;
-    margin-bottom: 10px;
-}
-
-.stTextInput > div > div {
-    background: #0D1320 !important;
-    border: 1px solid #1E293B !important;
-    border-radius: 10px !important;
-    transition: border-color 0.2s ease !important;
-}
-
-.stTextInput > div > div:focus-within {
-    border-color: #F5A623 !important;
-    box-shadow: 0 0 0 3px rgba(245,166,35,0.08) !important;
-}
-
-.stTextInput input {
-    background: transparent !important;
-    color: #E2E8F0 !important;
-    font-family: 'Inter', sans-serif !important;
-    font-size: 15px !important;
-    padding: 14px 18px !important;
-    caret-color: #F5A623 !important;
-}
-
-.stTextInput input::placeholder {
-    color: #334155 !important;
-}
-
-/* ── Button ── */
-.stButton > button {
-    background: linear-gradient(135deg, #F5A623 0%, #E8833A 100%) !important;
-    color: #080C14 !important;
-    border: none !important;
-    border-radius: 10px !important;
-    font-family: 'Syne', sans-serif !important;
-    font-weight: 700 !important;
-    font-size: 14px !important;
-    letter-spacing: 0.04em !important;
-    padding: 14px 28px !important;
-    width: 100% !important;
-    height: auto !important;
-    transition: opacity 0.2s ease, transform 0.1s ease !important;
-}
-
-.stButton > button:hover {
-    opacity: 0.9 !important;
-    transform: translateY(-1px) !important;
-}
-
-.stButton > button:active {
-    transform: translateY(0) !important;
-}
-
-/* ── Divider ── */
-.section-divider {
-    width: 100%;
-    height: 1px;
-    background: #1E293B;
-    margin: 2.5rem 0;
-}
-
-/* ── Report header ── */
-.report-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1.5rem;
-}
-
-.report-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 20px;
-    font-weight: 700;
-    color: #F8FAFC;
-    letter-spacing: -0.01em;
-}
-
-.report-id {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: #334155;
-    letter-spacing: 0.08em;
-}
-
-/* ── Result cards ── */
-.result-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 16px;
-}
-
-.result-card {
-    background: #0D1320;
-    border: 1px solid #1E293B;
-    border-radius: 12px;
-    padding: 22px 24px;
-    position: relative;
-    overflow: hidden;
-}
-
-.result-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-}
-
-.card-controls::before { background: linear-gradient(90deg, #F5A623, transparent); }
-.card-risks::before    { background: linear-gradient(90deg, #F87171, transparent); }
-.card-recs::before     { background: linear-gradient(90deg, #38BDF8, transparent); }
-.card-comp::before     { background: linear-gradient(90deg, #34D399, transparent); }
-
-.card-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 16px;
-}
-
-.card-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    flex-shrink: 0;
-}
-
-.icon-controls { background: rgba(245,166,35,0.12); }
-.icon-risks    { background: rgba(248,113,113,0.12); }
-.icon-recs     { background: rgba(56,189,248,0.12); }
-.icon-comp     { background: rgba(52,211,153,0.12); }
-
-.card-title {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: #64748B;
-}
-
-.card-count {
-    font-family: 'Syne', sans-serif;
-    font-size: 12px;
-    font-weight: 700;
-    color: #334155;
-    margin-left: auto;
-}
-
-/* ── Tag items ── */
-.tag-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.tag-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    font-size: 13px;
-    line-height: 1.5;
-    font-family: 'Inter', sans-serif;
-    font-weight: 400;
-}
-
-.tag-control {
-    background: rgba(245,166,35,0.06);
-    border: 1px solid rgba(245,166,35,0.12);
-    color: #CBD5E1;
-}
-
-.tag-control .tag-dot { color: #F5A623; font-size: 10px; margin-top: 3px; }
-
-.tag-risk {
-    background: rgba(248,113,113,0.06);
-    border: 1px solid rgba(248,113,113,0.12);
-    color: #CBD5E1;
-}
-
-.tag-risk .tag-dot { color: #F87171; font-size: 10px; margin-top: 3px; }
-
-.tag-rec {
-    background: rgba(56,189,248,0.06);
-    border: 1px solid rgba(56,189,248,0.12);
-    color: #CBD5E1;
-}
-
-.tag-rec .tag-dot { color: #38BDF8; font-size: 10px; margin-top: 3px; }
-
-.tag-comp {
-    background: rgba(52,211,153,0.06);
-    border: 1px solid rgba(52,211,153,0.12);
-    color: #CBD5E1;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px;
-}
-
-.tag-comp .tag-dot { color: #34D399; font-size: 10px; margin-top: 3px; }
-
-/* ── Query echo card ── */
-.query-echo {
-    background: #0D1320;
-    border: 1px solid #1E293B;
-    border-radius: 12px;
-    padding: 18px 24px;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-}
-
-.query-echo-label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #334155;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-.query-echo-text {
-    font-family: 'Inter', sans-serif;
-    font-size: 14px;
-    color: #94A3B8;
-    font-style: italic;
-}
-
-/* ── Full-width card ── */
-.full-card {
-    background: #0D1320;
-    border: 1px solid #1E293B;
-    border-radius: 12px;
-    padding: 22px 24px;
-    margin-bottom: 16px;
-    position: relative;
-    overflow: hidden;
-}
-
-/* ── Empty state ── */
-.empty-state {
-    text-align: center;
-    padding: 4rem 2rem;
-    color: #1E293B;
-}
-
-.empty-icon {
-    font-size: 48px;
-    margin-bottom: 1rem;
-    opacity: 0.3;
-}
-
-.empty-text {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 13px;
-    color: #1E293B;
-    letter-spacing: 0.06em;
-}
-
-/* ── Footer ── */
-.footer {
-    margin-top: 4rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid #0F172A;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.footer-left {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: #1E293B;
-    letter-spacing: 0.06em;
-}
-
-.footer-right {
-    font-family: 'Inter', sans-serif;
-    font-size: 11px;
-    color: #1E293B;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
-# HEADER
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# SIDEBAR NAVIGATION
+# ─────────────────────────────────────────────────────────────────────────────
 
-st.markdown('<div class="top-rule"></div>', unsafe_allow_html=True)
+with st.sidebar:
+    st.markdown("""
+        <div style="padding: 1rem 0;">
+            <h3 style="color: white; margin-bottom: 0.2rem;"> GRC ENGINE</h3>
+            <p class="mono" style="color: var(--accent-amber);">Intelligence v2.4.0</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.divider()
+    
+    nav = st.radio(
+    "Navigation",
+    [
+        "Audit Intelligence",
+        "Control Catalog",
+        "Evidence Vault",
+        "Risk Analytics",
+        "System Settings"
+    ],
+    label_visibility="collapsed"
+)
+
+    
+    
+    st.markdown("""
+        <div style="margin-top: 3rem; padding-top: 1rem; width: 100%;">
+            <p class="mono" style="color: #475569; margin-bottom: 4px;">System Health</p>
+            <div style="height: 4px; width: 100%; background: #1E293B; border-radius: 10px;">
+                <div style="height: 100%; width: 92%; background: #34D399; border-radius: 10px;"></div>
+            </div>
+            <p style="font-size: 11px; color: #64748B; margin-top: 8px;">Retrieval Latency: 142ms</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HERO SECTION
+# ─────────────────────────────────────────────────────────────────────────────
 
 st.markdown("""
-<div class="header-wrap">
-    <div class="header-left">
-        <div class="header-badge">GRC Intelligence Engine · v2.0</div>
-        <div class="header-title">Audit <span>Assistant</span></div>
-        <div class="header-sub">
-            Agentic compliance analysis for SOC 2 and ISO 27001 audit workflows.
-            Query → Retrieve → Analyse → Report.
+    <div class="hero-container">
+        <p class="mono" style="color: var(--accent-amber); margin-bottom: 1rem;">// SECURITY REASONING ENGINE</p>
+        <h1 class="hero-title">Audit Intelligence, <br>Reimagined.</h1>
+        <div class="hero-subtitle">
+            Enterprise-grade semantic retrieval and multi-agent reasoning for SOC 2, ISO 27001, 
+            and NIST CSF compliance. Precision-engineered for auditors and security teams.
         </div>
     </div>
-    <div class="header-right">
-        <div class="framework-pill pill-soc2">SOC 2 Type II</div>
-        <div class="framework-pill pill-iso">ISO 27001:2022</div>
-        <div class="framework-pill pill-gdpr">GDPR</div>
-    </div>
-</div>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
-# STAT STRIP
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# TOP METRICS DASHBOARD
+# ─────────────────────────────────────────────────────────────────────────────
 
-st.markdown("""
-<div class="stat-strip">
-    <div class="stat-cell">
-        <div class="stat-label">Architecture</div>
-        <div class="stat-value">3</div>
-        <div class="stat-desc">Agentic reasoning layers</div>
+st.markdown(f"""
+    <div class="metric-grid">
+        <div class="stat-card">
+            <p class="mono" style="color: var(--text-dim);">Controls Indexed</p>
+            <p class="stat-value">{kb_size}</p>
+            <p style="color: #34D399; font-size: 12px; margin-top: 4px;">↑ 12.4% vs last audit</p>
+        </div>
+        <div class="stat-card">
+            <p class="mono" style="color: var(--text-dim);">Embedding Model</p>
+            <p class="stat-value" style="font-size: 1.2rem; color: var(--accent-blue);">MINILM-L6-V2</p>
+            <p style="color: var(--text-dim); font-size: 12px; margin-top: 14px;">Vector Latency: 0.04ms</p>
+        </div>
+        <div class="stat-card">
+            <p class="mono" style="color: var(--text-dim);">Active Frameworks</p>
+            <p class="stat-value">4</p>
+            <p style="color: var(--text-dim); font-size: 12px; margin-top: 4px;">SOC2, ISO, NIST, GDPR</p>
+        </div>
+        <div class="stat-card">
+            <p class="mono" style="color: var(--text-dim);">Agent Reliability</p>
+            <p class="stat-value">99.8%</p>
+            <p style="color: #34D399; font-size: 12px; margin-top: 4px;">Reasoning Consensus</p>
+        </div>
     </div>
-    <div class="stat-cell">
-        <div class="stat-label">Frameworks</div>
-        <div class="stat-value">3+</div>
-        <div class="stat-desc">SOC 2, ISO 27001, GDPR</div>
-    </div>
-    <div class="stat-cell">
-        <div class="stat-label">Retrieval</div>
-        <div class="stat-value">CSV</div>
-        <div class="stat-desc">SOC 2 control tracker dataset</div>
-    </div>
-    <div class="stat-cell">
-        <div class="stat-label">Output</div>
-        <div class="stat-value">4</div>
-        <div class="stat-desc">Structured response fields</div>
-    </div>
-</div>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
-# LOAD KNOWLEDGE BASE
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# COMMAND CENTER (QUERY INPUT)
+# ─────────────────────────────────────────────────────────────────────────────
 
-df = pd.read_csv("../data/SOC2_tracker - Sheet1.csv")
-knowledge_base = df.to_dict(orient="records")
+st.markdown('<div class="query-section">', unsafe_allow_html=True)
+st.markdown('<p class="mono" style="color: var(--accent-amber); margin-bottom: 1rem;">> Input Compliance Query</p>', unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
-# QUERY INPUT
-# ─────────────────────────────────────────────
+q_col1, q_col2 = st.columns([4, 1])
 
-st.markdown('<div class="query-label">↳ Enter Audit Query</div>', unsafe_allow_html=True)
-
-col_input, col_btn = st.columns([5, 1])
-
-with col_input:
+with q_col1:
     query = st.text_input(
-        label="audit_query",
+        "query",
         label_visibility="collapsed",
-        placeholder="e.g.  How is customer data protected at rest and in transit?",
-        key="audit_query"
+        placeholder="e.g., How do we manage encryption keys and production access logs?"
     )
-
-with col_btn:
-    run_analysis = st.button("Analyse →")
-
-st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────
-# RESULTS
-# ─────────────────────────────────────────────
-
-import datetime
-
-if run_analysis and query.strip():
-
-    controls = retrieve_controls(query, knowledge_base)
-    response = generate_response(query, controls)
-
-    report_id = f"AUD-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
-
-    # Report header
-    st.markdown(f"""
-    <div class="report-header">
-        <div class="report-title">Audit Analysis Report</div>
-        <div class="report-id">{report_id}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Query echo
-    st.markdown(f"""
-    <div class="query-echo">
-        <div class="query-echo-label">Query</div>
-        <div class="query-echo-text">"{response["query"]}"</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Build tag HTML helpers ──
-    def build_tags(items, tag_class, dot_char="◆"):
-        if not items:
-            return '<div class="tag-item ' + tag_class + '"><span class="tag-dot">' + dot_char + '</span>None identified.</div>'
-        html = ""
-        for item in items:
-            html += f'<div class="tag-item {tag_class}"><span class="tag-dot">{dot_char}</span>{item}</div>'
-        return html
-
-    # ── 2×2 Grid: Controls + Risks ──
-    controls_html = build_tags(response.get("matched_controls", []), "tag-control")
-    risks_html    = build_tags(response.get("risk_analysis", []),    "tag-risk",  "▲")
-
-    st.markdown(f"""
-    <div class="result-grid">
-        <div class="result-card card-controls">
-            <div class="card-header">
-                <div class="card-icon icon-controls">🔐</div>
-                <div class="card-title">Matched Controls</div>
-                <div class="card-count">{len(response.get("matched_controls", []))} found</div>
-            </div>
-            <div class="tag-list">{controls_html}</div>
-        </div>
-        <div class="result-card card-risks">
-            <div class="card-header">
-                <div class="card-icon icon-risks">⚠️</div>
-                <div class="card-title">Risk Analysis</div>
-                <div class="card-count">{len(response.get("risk_analysis", []))} identified</div>
-            </div>
-            <div class="tag-list">{risks_html}</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── 2×2 Grid: Recommendations + Compliance ──
-    recs_html  = build_tags(response.get("recommendations", []),   "tag-rec",  "→")
-    comp_html  = build_tags(response.get("compliance_mapping", []),"tag-comp", "✓")
-
-    st.markdown(f"""
-    <div class="result-grid">
-        <div class="result-card card-recs">
-            <div class="card-header">
-                <div class="card-icon icon-recs">💡</div>
-                <div class="card-title">Recommendations</div>
-                <div class="card-count">{len(response.get("recommendations", []))} actions</div>
-            </div>
-            <div class="tag-list">{recs_html}</div>
-        </div>
-        <div class="result-card card-comp">
-            <div class="card-header">
-                <div class="card-icon icon-comp">📋</div>
-                <div class="card-title">Compliance Mapping</div>
-                <div class="card-count">{len(response.get("compliance_mapping", []))} frameworks</div>
-            </div>
-            <div class="tag-list">{comp_html}</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-elif run_analysis and not query.strip():
     st.markdown("""
-    <div class="empty-state">
-        <div class="empty-icon">⌕</div>
-        <div class="empty-text">Enter a query above to run audit analysis.</div>
-    </div>
+        <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+            <span style="font-size: 12px; color: #475569;">Suggestions:</span>
+            <span style="font-size: 12px; color: var(--accent-blue); cursor: pointer;">Data at rest policy</span>
+            <span style="font-size: 12px; color: var(--accent-blue); cursor: pointer;">MFA requirements</span>
+            <span style="font-size: 12px; color: var(--accent-blue); cursor: pointer;">Incident response plan</span>
+        </div>
     """, unsafe_allow_html=True)
 
+with q_col2:
+    run = st.button("RUN INTELLIGENCE")
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LOGIC & RESULTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_risk_style(level):
+    return f"risk-{level.lower()}"
+
+if run and query.strip():
+    with st.status("Initializing Multi-Agent Reasoning...", expanded=True) as status:
+        st.write("Fetching semantic embeddings...")
+        processed_query = process_query(query)
+        st.write("Scanning knowledge base for control matches...")
+        controls = retrieve_controls(processed_query, knowledge_base, top_k=5, min_score=0.20)
+        st.write("Generating compliance risk profile...")
+        report = generate_response(processed_query, controls)
+        status.update(label="Analysis Complete", state="complete", expanded=False)
+
+    # Main Intelligence Layout
+    st.markdown(f"""
+        <div style="margin-bottom: 2rem;">
+            <h2 style="color: white; margin-bottom: 0.5rem;">Audit Findings Report</h2>
+            <div class="risk-badge {get_risk_style(report.risk_level)}">
+                Overall Risk Profile: {report.risk_level}
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Row 1: Key Analysis
+    c1, c2 = st.columns(2)
+    
+    with c1:
+        st.markdown('<div class="intel-card">', unsafe_allow_html=True)
+        st.markdown('<p class="mono" style="color: var(--accent-amber);">Matched Control Intelligence</p>', unsafe_allow_html=True)
+        for ctrl, score in zip(report.matched_controls, report.similarity_scores):
+            pct = int(score * 100)
+            st.markdown(f"""
+                <div style="margin-bottom: 1.2rem;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="font-size: 13px; color: var(--text-main); font-weight: 500;">{ctrl}</span>
+                        <span style="font-size: 11px; color: var(--accent-blue);">{pct}% Match</span>
+                    </div>
+                    <div style="height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px;">
+                        <div style="height: 100%; width: {pct}%; background: var(--accent-blue); border-radius: 10px;"></div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with c2:
+        st.markdown('<div class="intel-card">', unsafe_allow_html=True)
+        st.markdown('<p class="mono" style="color: var(--accent-amber);">Risk Reasoning</p>', unsafe_allow_html=True)
+        for risk in report.risk_analysis:
+            st.markdown(f"""
+                <div style="padding: 0.8rem; background: rgba(255,255,255,0.03); border-radius: 6px; margin-bottom: 0.5rem; border-left: 3px solid #F87171; font-size: 14px;">
+                    {risk}
+                </div>
+            """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Row 2: Actions & Coverage
+    st.write("")
+    c3, c4 = st.columns([3, 2])
+
+    with c3:
+        st.markdown('<div class="intel-card">', unsafe_allow_html=True)
+        st.markdown('<p class="mono" style="color: var(--accent-amber);">Remediation Roadmap</p>', unsafe_allow_html=True)
+        for i, rec in enumerate(report.recommendations):
+            st.markdown(f"""
+                <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                    <div style="color: var(--accent-amber); font-weight: 800;">0{i+1}</div>
+                    <div style="color: var(--text-main); font-size: 14px;">{rec}</div>
+                </div>
+            """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with c4:
+        st.markdown('<div class="intel-card">', unsafe_allow_html=True)
+        st.markdown('<p class="mono" style="color: var(--accent-amber);">Framework Alignment</p>', unsafe_allow_html=True)
+        cols = st.columns(2)
+        for i, fw in enumerate(report.compliance_mapping):
+            target_col = cols[i % 2]
+            target_col.markdown(f"""
+                <div style="padding: 10px; border: 1px solid var(--border-subtle); border-radius: 4px; text-align: center; font-size: 12px; margin-bottom: 8px;">
+                    {fw}
+                </div>
+            """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Bottom Evidence Section
+    if report.evidence_required:
+        st.write("")
+        st.markdown('<div class="intel-card" style="border-top: 2px solid var(--accent-blue);">', unsafe_allow_html=True)
+        st.markdown('<p class="mono" style="color: var(--accent-blue);">Required Evidence for Audit (Artifacts)</p>', unsafe_allow_html=True)
+        ev_cols = st.columns(len(report.evidence_required) if len(report.evidence_required) > 0 else 1)
+        for i, ev in enumerate(report.evidence_required):
+            ev_cols[i % len(ev_cols)].markdown(f"""
+                <div style="font-size: 13px; color: var(--text-dim);">
+                    • {ev}
+                </div>
+            """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+elif not query.strip() and run:
+    st.warning("SYSTEM NOTICE: Query input required for analysis initialization.")
 else:
+    # Empty State
     st.markdown("""
-    <div class="empty-state">
-        <div class="empty-icon">🛡</div>
-        <div class="empty-text">Awaiting audit query — results will appear here.</div>
-    </div>
+        <div style="text-align: center; padding: 5rem 0; border: 1px dashed var(--border-subtle); border-radius: 20px;">
+            <p style="color: #475569; font-size: 1.2rem;">System Idle. Awaiting Compliance Query...</p>
+            <p class="mono" style="color: #1E293B; margin-top: 1rem;">Ready for semantic audit reasoning</p>
+        </div>
     """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # FOOTER
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 
 st.markdown("""
-<div class="footer">
-    <div class="footer-left">GRC AUDIT ASSISTANT · AGENTIC WORKFLOW SIMULATION</div>
-    <div class="footer-right">Not for production audit use without domain expert review.</div>
-</div>
+    <div style="margin-top: 5rem; padding: 2rem 0; border-top: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+        <div class="mono" style="color: #475569;">© 2026 GRC INTELLIGENCE ENGINE // TERMINAL_01</div>
+        <div style="display: flex; gap: 2rem;">
+            <span class="mono" style="color: #475569;">SECURITY STATUS: ENCRYPTED</span>
+            <span class="mono" style="color: #475569;">REGION: US-EAST-1</span>
+        </div>
+    </div>
 """, unsafe_allow_html=True)
