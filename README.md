@@ -1,201 +1,30 @@
-# GRC Audit Assistant — Agentic Workflow Simulation
-
-A Python-based GRC audit assistant that simulates an agentic reasoning workflow to interpret compliance queries, retrieve relevant security controls, and generate structured audit responses with mapped evidence requirements. Built to reflect real-world audit processes used in compliance platforms operating across frameworks such as SOC 2 and ISO 27001.
-
----
-
-## Overview
-
-Audit query resolution in GRC workflows is typically manual, inconsistent, and slow. This tool automates the first-response layer of that process — accepting a natural language compliance question, identifying applicable control domains through keyword-based reasoning, and returning a structured, audit-ready response with evidence requirements, risk classification, and ownership details.
-
-The system is implemented as a multi-agent pipeline where each function represents a discrete reasoning step, simulating the interpret → retrieve → respond loop of a human audit analyst.
-
----
-
-## Agentic Workflow Architecture
-
-```
-User Query (Natural Language)
-        │
-        ▼
-┌──────────────────────────┐
-│   Query Understanding     │  ← Keyword extraction identifies
-│   Agent                   │    relevant control domains
-│   extract_keywords()      │    from natural language input
-└──────────────────────────┘
-        │
-        ▼
-┌──────────────────────────┐
-│   Retrieval Agent         │  ← Matches extracted keywords against
-│   retrieve_controls()     │    SOC 2 control knowledge base
-│                           │    (hardcoded KB or CSV tracker)
-└──────────────────────────┘
-        │
-        ▼
-┌──────────────────────────┐
-│   Analysis Agent          │  ← Generates structured audit response
-│   generate_response()     │    with controls, risks, evidence
-│                           │    requirements, and compliance tags
-└──────────────────────────┘
-        │
-        ▼
-Structured Audit Response Output
-```
-
----
-
-## Features
-
-- **Natural language query intake** — Accepts plain-language audit questions without requiring structured input format
-- **Keyword-based control mapping** — Rule-based reasoning layer extracts intent from queries and maps to relevant control domains
-- **Dual knowledge base support** — Works with both a hardcoded control dictionary and a structured `SOC2_tracker.csv` dataset
-- **Risk classification** — Automatically assigns risk level (High / Medium) based on identified risk types
-- **Evidence requirement mapping** — Outputs specific evidence requirements per control, drawn from the tracker dataset
-- **Compliance framework tagging** — Each response includes applicable frameworks (SOC 2, ISO 27001, GDPR)
-- **Ownership tracking** — Identifies control owners from the tracker for accountability mapping
-
----
-
-## Tech Stack
-
-| Component | Technology |
-|---|---|
-| Language | Python 3 |
-| Data Handling | Pandas |
-| Knowledge Base | Hardcoded dictionary + CSV (`SOC2_tracker.csv`) |
-| Output Formatting | pprint (structured dict output) |
-| Environment | Google Colab |
-| Version Control | Git, GitHub |
-
----
-
-## Controls Coverage
-
-### Hardcoded Knowledge Base (Version 1)
-
-| Control ID | Title | Frameworks |
-|---|---|---|
-| AC-01 | Access Control Policy | ISO 27001, SOC 2 |
-| EN-01 | Data Encryption | ISO 27001, GDPR |
-| LG-01 | Logging and Monitoring | SOC 2 |
-
-### CSV-Based Knowledge Base (Version 2)
-
-Loaded dynamically from `SOC2_tracker.csv`. Expected columns:
-
-| Column | Description |
-|---|---|
-| `Control ID` | Unique control identifier |
-| `Control Name` | Short name of the control |
-| `Description` | Full control description |
-| `Evidence Required` | Specific evidence an auditor would require |
-| `Owner` | Team or individual responsible for the control |
-| `Status` | Implementation status (e.g., Implemented, In Progress) |
-
----
-
-## Example
-
-**Input Query:**
-```
-How is data protected?
-```
-
-**Version 1 Output (Hardcoded KB):**
-```python
-{
-  'query': 'How is data protected?',
-  'summary': 'Relevant security controls identified based on query.',
-  'controls': ['EN-01'],
-  'risks': ['Data breach'],
-  'risk_level': 'High',
-  'recommendation': 'Implement and review the above controls regularly.',
-  'compliance': ['ISO 27001', 'GDPR']
-}
-```
-
-**Version 2 Output (CSV Tracker):**
-```python
-{
-  'query': 'How is data protected?',
-  'controls': ['EN-01'],
-  'evidence_required': ['Encryption configuration documentation, TLS logs'],
-  'owners': ['Security Team'],
-  'status': ['Implemented']
-}
-```
-
----
-
-## Project Structure
-
-```
-grc-audit-assistant/
-│
-├── GRC_Audit_agent.ipynb     # Main Colab notebook (full workflow)
-├── SOC2_tracker.csv          # SOC 2 control dataset (required for Version 2)
-└── README.md                 # Project documentation
-```
-
----
-
-## Setup and Usage
-
-### Prerequisites
-```
-Python 3.8+
-Google Colab (recommended) or local Jupyter environment
-SOC2_tracker.csv placed in the same directory or mounted drive
-```
-
-### Running in Google Colab
-
-1. Upload `GRC_Audit_agent.ipynb` to Google Colab
-2. Upload `SOC2_tracker.csv` to the Colab session storage or mount Google Drive
-3. Run all cells in sequence
-4. Enter your audit query when prompted
-
-### Running Locally
-
-```bash
-git clone https://github.com/your-username/grc-audit-assistant.git
-cd grc-audit-assistant
-pip install pandas
-jupyter notebook GRC_Audit_agent.ipynb
-```
-
----
-
-## Design Decisions and Limitations
-
-**Why rule-based keyword extraction instead of an LLM?**
-The keyword extraction layer uses deterministic logic intentionally — ensuring predictable, auditable control retrieval without dependence on external API calls or non-deterministic model outputs. This makes the retrieval layer transparent and reproducible, which is a meaningful property in a compliance context where auditability of the tool itself matters.
-
-**Current limitations:**
-- Keyword matching is limited to three domains (access, data, log) in Version 1 — expanding the keyword dictionary improves coverage significantly
-- The system does not handle compound or ambiguous queries where multiple unrelated control domains are implicated
-- Output is structured Python dict format — a production version would serialise to JSON or render to a formatted audit report template
-
-**Potential extensions:**
-- Integrate an LLM layer (Claude / OpenAI) for semantic query understanding beyond keyword matching
-- Add a confidence score per retrieved control
-- Export audit responses to PDF or structured JSON for formal audit documentation workflows
-- Expand `SOC2_tracker.csv` to cover full SOC 2 Trust Service Criteria (CC1–CC9, A1, C1, PI1, P1–P8)
-
----
-
-## Relevance to GRC and Compliance Automation
-
-This project addresses a concrete operational problem in audit workflows: the manual, inconsistent handling of routine compliance queries. The agentic pipeline design — discrete agents for understanding, retrieval, and analysis — mirrors the architecture being adopted in production GRC platforms for automating audit partner query management, evidence collection tracking, and control gap identification.
-
----
-
-## Author
-
-**Rewa Shukla**
-Cybersecurity | GRC | AI-Assisted Audit Workflows
-[LinkedIn](https://www.linkedin.com/in/rewa-shukla-320b02301) | rewashukla04@gmail.com
-
----
-
-*Built as part of an applied GRC learning initiative. Intended to demonstrate agentic workflow design principles in a compliance automation context. Not for production audit use without domain expert review and expanded control coverage.*
+GRC Intelligence EngineEnterprise AI-Powered Cybersecurity Compliance Intelligence PlatformThe GRC Intelligence Engine is a production-grade cybersecurity compliance platform designed to automate the complex lifecycle of audit reasoning, control retrieval, and risk analysis. By leveraging a high-performance Agentic Workflow and Semantic Retrieval (RAG), the engine transforms raw compliance queries into structured, audit-ready intelligence reports.Designed for security teams, auditors, and compliance analysts, the platform bridges the gap between natural language inquiries and formal frameworks like SOC 2, ISO 27001, GDPR, and NIST CSF.🏗️ Architecture & Agentic WorkflowThe platform utilizes a modular, multi-agent architecture where discrete reasoning layers collaborate to ensure high-fidelity outputs. This design ensures that every audit response is grounded in the underlying control knowledge base.Code snippetgraph TD
+    A[User Query] --> B{Query Agent}
+    B -->|Intent & Metadata| C{Retrieval Agent}
+    C -->|Semantic Search| D[(Control Knowledge Base)]
+    D -->|Top-K Context| E{Analysis Agent}
+    E -->|Reasoning & Mapping| F[Audit Intelligence Report]
+    
+    subgraph "Intelligence Layers"
+    B
+    C
+    E
+    end
+The Three-Pillar Agent SystemQuery Agent: Performs intent detection and semantic preprocessing. It deconstructs natural language into high-dimensional vectors to identify the core compliance domain.Retrieval Agent: Powered by SentenceTransformers (all-MiniLM-L6-v2), this agent executes a semantic search against the control repository. It uses Cosine Similarity to rank controls based on conceptual relevance rather than simple keyword matches.Analysis Agent: The reasoning core. It synthesizes retrieved controls, performs risk classification, maps framework cross-references, and identifies specific evidence requirements.🚀 Key FeaturesSemantic Retrieval Engine: Moves beyond fragile keyword matching to understand compliance context (e.g., recognizing that "user entry" and "identity management" both relate to Access Control).Multi-Framework Mapping: Automatically cross-references findings across SOC 2, ISO 27001, GDPR, and NIST CSF.Risk Reasoning Engine: Categorizes risks (Critical to Low) based on control gaps and impact analysis.Evidence Requirement Mapping: Generates a specific checklist of artifacts (logs, policies, screenshots) required to satisfy an auditor's request.Enterprise Dashboard: A premium, dark-mode Streamlit interface optimized for Security Operations Center (SOC) environments.Scalable RAG Design: Architected for seamless integration with vector databases like ChromaDB and automated PDF ingestion.🛠️ Tech StackComponentTechnologyFrontendStreamlit (Enterprise UI/UX)Reasoning EngineAgentic Workflow DesignEmbeddingsSentenceTransformers (all-MiniLM-L6-v2)Vector MathCosine Similarity RankingData OrchestrationPandas, Python 3.9+EnvironmentDotenv (.env), VS Code Workflow📁 Project StructurePlaintextgrc-intelligence-engine/
+├── .env                # Environment variables & configurations
+├── requirements.txt    # Production dependencies
+├── streamlit_app.py    # Main Enterprise Dashboard
+├── data/
+│   └── SOC2_tracker.csv # Structured Control Knowledge Base
+├── agents/             # Modular Agent Logic
+│   ├── query_agent.py
+│   ├── retrieval_agent.py
+│   └── analysis_agent.py
+└── scripts/            # CLI Tools & Maintenance
+💻 Installation & Local DeploymentPrerequisitesPython 3.9 or higherVirtual environment (recommended)1. Clone the RepositoryBashgit clone https://github.com/your-username/grc-intelligence-engine.git
+cd grc-intelligence-engine
+2. Setup EnvironmentBashpython -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+3. Configure Knowledge BasePlace your control data in data/SOC2_tracker- Sheet1.csv. The engine expects columns including Control ID, Control Name, Description, Evidence Required, and Owner.🖥️ UsageLaunch the DashboardExperience the full enterprise UI by running:Bashstreamlit run streamlit_app.py
+Example Queries"How is sensitive customer data protected at rest and in transit?""What are our requirements for multi-factor authentication (MFA)?""Show me the incident response controls for SOC 2 compliance."🗺️ Roadmap[ ] Vector Database Integration: Migration from in-memory similarity to ChromaDB for massive scale.[ ] Automated Ingestion: PDF/Docx parser to ingest existing company policies directly into the knowledge base.[ ] Consensus Reasoning: Integration with LLMs (OpenAI/Anthropic) to provide deeper narrative analysis.[ ] Export Engine: Generate formal Audit Readiness Reports in PDF/JSON formats.🛡️ Security & Compliance PositioningThis platform is built to handle sensitive compliance data. It emphasizes Deterministic Retrieval—ensuring that while the query understanding is semantic, the actual controls returned are strictly sourced from your approved internal data, preventing AI "hallucinations" in a high-stakes audit context.👤 AuthorRewa ShuklaCybersecurity | GRC | AI EngineeringLinkedIn | rewashukla04@gmail.comDisclaimer: This platform is a decision-support tool designed to assist compliance professionals. Final audit determinations should always be reviewed by a qualified GRC expert.
